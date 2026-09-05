@@ -22,7 +22,6 @@
 .route-badge-offsched{background:#fde8d7;color:#a1520c}
 .route-badge-cancelled{background:#f1f2f4;color:#565f68}
 .route-badge-workshop{background:#eee6fb;color:#5b2fa3}
-.route-badge-secondvisit{background:#fdeccf;color:#a15c00}
 .route-badge-needspart{background:#dff3ea;color:#187a4e}
 .route-order-card{cursor:pointer}
 .route-day-strip{display:flex;gap:8px;overflow-x:auto;padding:6px 2px 12px;-webkit-overflow-scrolling:touch}
@@ -364,7 +363,6 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .route-down-btn{background:#fff0e8!important;color:#b34b16!important;border:1px solid #e7b28e!important}
 .route-contact-unavailable{background:#fff1f1!important;color:#b42318!important;border:1px solid #efb0aa!important}
 .route-contact-noanswer{background:#fff8df!important;color:#8a6500!important;border:1px solid #e4c76a!important}
-.route-contact-secondvisit{background:#fdeccf!important;color:#a15c00!important;border:1px solid #ecc487!important}
 .route-contact-needspart{background:#dff3ea!important;color:#187a4e!important;border:1px solid #a9dbb9!important}
 .route-badge-unavailable{background:#fde7e7!important;color:#b42318!important}
 .route-badge-noanswer{background:#fff1c7!important;color:#8a6500!important}
