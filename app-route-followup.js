@@ -61,7 +61,7 @@ function moveRouteItem(id,delta){
 // ---- خط سير الورشة: كل الأيام مش بس اليوم ----
 // حالة الصفحة (اليوم المختار / وضع "كل المتأخر") محفوظة في متغيّر بسيط بدل
 // localStorage عشان بتتصفّر كل ما تفتح الصفحة من جديد على اليوم الحالي.
-const routeViewState={day:null,overdueView:false,quickCloseId:null};
+const routeViewState={day:null,overdueView:false,quickCloseId:null,lastTurnId:undefined};
 function routeDaysWithData(){
   const set=new Set();
   arr(K.r).forEach(x=>{
@@ -93,17 +93,20 @@ function jumpRouteToday(){
   routeViewState.overdueView=false;
   routeViewState.day=dayKeyLocal(new Date());
   routeViewState.quickCloseId=null;
+  routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
 function selectRouteDay(day){
   routeViewState.overdueView=false;
   routeViewState.day=day;
   routeViewState.quickCloseId=null;
+  routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
 function toggleRouteOverdueView(){
   routeViewState.overdueView=!routeViewState.overdueView;
   routeViewState.quickCloseId=null;
+  routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
 function renderRouteDayStrip(){
@@ -136,14 +139,33 @@ function renderRoute(){
   if(summaryEl){
     let scheduledOnly=list;
     let closedToday=scheduledOnly.filter(x=>x.closed),visitedNotClosed=scheduledOnly.filter(x=>!x.closed&&!x.contactStatus&&x.status!=="ملغي"&&x.visitedAt&&dayKeyLocal(x.visitedAt)===routeViewState.day),notVisited=scheduledOnly.filter(x=>!x.closed&&!x.contactStatus&&x.status!=="ملغي"&&!(x.visitedAt&&dayKeyLocal(x.visitedAt)===routeViewState.day)),collected=closedToday.reduce((a,x)=>a+Math.max(0,(+x.total||0)-(+x.deposit||0)),0),offSchedule=scheduledOnly.filter(x=>x._viaClosedOffSchedule).length;
-    // شريط تقدم اليوم: نسبة الأوامر اللي "خلصت شغلها" (بأي حالة نهائية أو
-    // معلّقة — مكتمل/مغلق/ملغي/ورشة/محتاج قطعة/تعليق تواصل) من إجمالي اليوم.
-    let handled=scheduledOnly.filter(x=>routeRowStatusInfo(x).collapsed).length, total=scheduledOnly.length, pct=total?Math.round(handled/total*100):0;
-    let progressHtml=!routeViewState.overdueView&&total?`<div class="route-progress"><div class="route-progress-bar"><div class="route-progress-fill" style="width:${pct}%"></div></div><div class="route-progress-label"><b>${handled}</b> من <b>${total}</b> خلصوا اليوم (${pct}%)</div></div>`:"";
+    // شريط تقدم اليوم + تفصيله: نقسّم كل أمر لحالة واحدة بس (بنفس أولوية
+    // routeRowStatusInfo) عشان العدّ يبقى صحيح من غير تكرار.
+    let buckets={done:0,cancelled:0,workshop:0,needspart:0,contact:0,pending:0,late:0};
+    scheduledOnly.forEach(x=>{
+      let info=routeRowStatusInfo(x);
+      if(!info.collapsed)buckets.pending++;
+      else if(info.cls==="route-badge-done")buckets.done++;
+      else if(info.cls==="route-badge-cancelled")buckets.cancelled++;
+      else if(info.cls==="route-badge-workshop")buckets.workshop++;
+      else if(info.cls==="route-badge-needspart")buckets.needspart++;
+      else buckets.contact++;
+      if(!x.closed&&x.status!=="ملغي"&&x.visit&&dayKeyLocal(x.visit)<today)buckets.late++;
+    });
+    let handled=scheduledOnly.length-buckets.pending, total=scheduledOnly.length, pct=total?Math.round(handled/total*100):0;
+    let bd=[];
+    if(buckets.done)bd.push(`✅ ${buckets.done} خلص`);
+    if(buckets.pending)bd.push(`⏳ ${buckets.pending} لسه`);
+    if(buckets.workshop)bd.push(`🏭 ${buckets.workshop} ورشة`);
+    if(buckets.needspart)bd.push(`📦 ${buckets.needspart} قطعة غيار`);
+    if(buckets.contact)bd.push(`📵 ${buckets.contact} تعليق تواصل`);
+    if(buckets.cancelled)bd.push(`🚫 ${buckets.cancelled} ملغي`);
+    if(buckets.late)bd.push(`⚠️ ${buckets.late} متأخر`);
+    let progressHtml=!routeViewState.overdueView&&total?`<div class="route-progress"><div class="route-progress-bar"><div class="route-progress-fill" style="width:${pct}%"></div></div><div class="route-progress-label"><b>${handled}</b> من <b>${total}</b> خلصوا اليوم (${pct}%)</div>${bd.length?`<div class="route-progress-breakdown">${bd.join(" • ")}</div>`:""}</div>`:"";
     summaryEl.innerHTML=`<div class="route-summary"><div class="stat"><b>${headTitle}</b><span>&nbsp;</span></div><div class="stat"><b>${scheduledOnly.length}</b><span>📋 إجمالي اليوم</span></div><div class="stat"><b>${closedToday.length}</b><span>✅ أُغلق وتم التحصيل</span></div><div class="stat"><b>${visitedNotClosed.length}</b><span>🚶 العمل جارٍ</span></div><div class="stat"><b>${notVisited.length}</b><span>⏳ لم تتم الزيارة بعد</span></div><div class="stat"><b>${collected.toFixed(2)} ج</b><span>💰 المُحصَّل</span></div>${offSchedule?`<div class="stat"><b>${offSchedule}</b><span>📦 اتقفل بدون جدولة مسبقة</span></div>`:""}</div>${progressHtml}`;
   }
   if(cf)list=list.filter(x=>x._addr.center===cf);
-  if(sq)list=list.filter(x=>(x._c.name||"").toLowerCase().includes(sq)||(x._c.phone||"").toLowerCase().includes(sq)||(x.no||"").toLowerCase().includes(sq));
+  if(sq)list=list.filter(x=>(x._c.name||"").toLowerCase().includes(sq)||(x._c.phone||"").toLowerCase().includes(sq)||(x.no||"").toLowerCase().includes(sq)||addressText(x._addr).toLowerCase().includes(sq)||deviceName(x.deviceId).toLowerCase().includes(sq)||(x.fault||"").toLowerCase().includes(sq));
   const orderIds=routeOrderForList(list), byId=new Map(list.map(x=>[x.id,x]));
   list=orderIds.map(id=>byId.get(id)).filter(Boolean);
   if(!list.length){el.innerHTML=`<div class="item">لا يوجد مواعيد ضمن الاختيار الحالي.</div>`;return}
@@ -151,6 +173,12 @@ function renderRoute(){
   // في الورشة/محتاج قطعة غيار/عليه حالة تواصل) هو الوحيد اللي بيتفتح كارت كامل.
   // أي حاجة تانية — سواء خلصت أو لسه ماجاش دورها — بتترجع سطر واحد مختصر.
   const currentTurnId=(list.find(x=>!routeRowStatusInfo(x).collapsed)||{}).id;
+  // نعمل auto-scroll للكارت المميز بس لما "الدور" يتغيّر فعلًا (مش كل مرة
+  // بيتعمل فيها renderRoute، وده بيحصل كتير)، ومش وإحنا بندوّر (sq) عشان
+  // منقطعش على المستخدم وهو بيكتب.
+  const prevTurnId=routeViewState.lastTurnId;
+  routeViewState.lastTurnId=currentTurnId;
+  const shouldAutoScroll=!sq&&prevTurnId!==undefined&&prevTurnId!==currentTurnId&&currentTurnId;
   let groups={};
   list.forEach(x=>{let k=x._addr.center||"بدون مركز";(groups[k]=groups[k]||[]).push(x)});
   let html="";
@@ -186,29 +214,64 @@ function renderRoute(){
     }).join("");
   });
   el.innerHTML=html;
+  if(shouldAutoScroll){
+    const activeEl=el.querySelector(".route-order-card-active");
+    if(activeEl)setTimeout(()=>activeEl.scrollIntoView({behavior:"smooth",block:"center"}),60);
+  }
+}
+function clearRouteSearch(){
+  const elS=document.getElementById("routeSearch");
+  if(elS){elS.value="";renderRoute();}
 }
 // فورم التقفيل السريع: بيظهر جوه كارت الأمر اللي عليه الدور نفسه من غير ما
-// تسيبي صفحة خط السير خالص — بتحطي المصنعية (لو محتاجة تتعدّل) واختياريًا
-// المحفظة، وبتأكيد واحد الأمر يتحول "مكتمل" ويتقفل ويتحصّل.
+// تسيبي صفحة خط السير خالص. فيه مساران: (1) تسجيل دفعة/عربون دلوقتي من غير
+// ما تقفلي الأمر (لو التحصيل جزئي)، أو (2) تقفيل نهائي بيحصّل كل المتبقي
+// ويقفل الأمر. المسار التاني بيتجاهل خانة "دفعة جديدة الآن" عشان التقفيل
+// النهائي بيحصّل كل حاجة فعليًا في نفس اللحظة، فمفيش داعي نخصمها الأول.
 function routeQuickCloseFormHtml(x){
   const partsTotal=+x.partsTotal||0, labor=+x.labor||0, deposit=+x.deposit||0;
   const wallets=settings().wallets||[];
   return `<div class="route-quickclose-form" onclick="event.stopPropagation()">
     <div class="route-quickclose-row"><label>🔨 المصنعية<input type="number" min="0" step=".01" id="qcLabor-${x.id}" value="${labor.toFixed(2)}" oninput="updateQuickCloseTotal('${x.id}')"></label><label>🔧 قطع الغيار<input type="text" value="${partsTotal.toFixed(2)} ج" disabled></label></div>
-    <div class="route-quickclose-row"><label>💰 الإجمالي<input type="text" id="qcTotal-${x.id}" value="${(partsTotal+labor).toFixed(2)} ج" disabled></label><label>💵 المتبقي بعد العربون<input type="text" id="qcRemain-${x.id}" value="${Math.max(0,partsTotal+labor-deposit).toFixed(2)} ج" disabled></label></div>
-    <label>💳 هيتحصل في محفظة إيه؟ <small>اختياري</small><select id="qcWallet-${x.id}"><option value="">بدون تحديد</option>${wallets.map(w=>`<option>${esc(w)}</option>`).join("")}</select></label>
-    <div class="route-quickclose-actions"><button type="button" class="primary mini-action" onclick="confirmQuickClose('${x.id}')">✅ تأكيد التقفيل والتحصيل</button><button type="button" class="secondary mini-action" onclick="toggleQuickClose('${x.id}')">إلغاء</button></div>
+    <div class="route-quickclose-row"><label>💰 الإجمالي<input type="text" id="qcTotal-${x.id}" value="${(partsTotal+labor).toFixed(2)} ج" disabled></label><label>💵 العربون المسجّل قبل كده<input type="text" value="${deposit.toFixed(2)} ج" disabled></label></div>
+    <div class="route-quickclose-row"><label>➕ دفعة جديدة استلمتها الآن <small>لو التحصيل جزئي بس</small><input type="number" min="0" step=".01" id="qcNewDeposit-${x.id}" value="0" oninput="updateQuickCloseTotal('${x.id}')"></label><label>💵 المتبقي المتوقع بعدها<input type="text" id="qcRemain-${x.id}" value="${Math.max(0,partsTotal+labor-deposit).toFixed(2)} ج" disabled></label></div>
+    <label>💳 هتتحصل في محفظة إيه؟ <small>اختياري</small><select id="qcWallet-${x.id}"><option value="">بدون تحديد</option>${wallets.map(w=>`<option>${esc(w)}</option>`).join("")}</select></label>
+    <div class="route-quickclose-actions"><button type="button" class="secondary mini-action" onclick="confirmQuickPartialPayment('${x.id}')">💰 تسجيل دفعة الآن (من غير تقفيل)</button></div>
+    <div class="route-quickclose-actions"><button type="button" class="primary mini-action" onclick="confirmQuickClose('${x.id}')">✅ تحصيل الباقي بالكامل وتقفيل الأمر</button><button type="button" class="secondary mini-action" onclick="toggleQuickClose('${x.id}')">إلغاء</button></div>
   </div>`;
 }
 function updateQuickCloseTotal(i){
   const r=arr(K.r).find(x=>x.id===i);if(!r)return;
-  const labor=+(document.getElementById(`qcLabor-${i}`)?.value||0), partsTotal=+r.partsTotal||0, deposit=+r.deposit||0;
+  const labor=+(document.getElementById(`qcLabor-${i}`)?.value||0), newDeposit=+(document.getElementById(`qcNewDeposit-${i}`)?.value||0);
+  const partsTotal=+r.partsTotal||0, deposit=+r.deposit||0;
   const total=partsTotal+labor;
   const totalEl=document.getElementById(`qcTotal-${i}`),remainEl=document.getElementById(`qcRemain-${i}`);
   if(totalEl)totalEl.value=total.toFixed(2)+" ج";
-  if(remainEl)remainEl.value=Math.max(0,total-deposit).toFixed(2)+" ج";
+  if(remainEl)remainEl.value=Math.max(0,total-deposit-newDeposit).toFixed(2)+" ج";
 }
 function toggleQuickClose(i){routeViewState.quickCloseId=routeViewState.quickCloseId===i?null:i;renderRoute();}
+// تسجيل دفعة/عربون جزئي دلوقتي من غير تقفيل الأمر — للحالة اللي العميل
+// بيدفع جزء بس دلوقتي وهيكمل الباقي بعدين.
+function confirmQuickPartialPayment(i){
+  const a=arr(K.r),r=a.find(x=>x.id===i);
+  if(!r||r.closed||r.paid)return;
+  const labor=+(document.getElementById(`qcLabor-${i}`)?.value||0);
+  const newDeposit=+(document.getElementById(`qcNewDeposit-${i}`)?.value||0);
+  if(!Number.isFinite(labor)||labor<0){alert("اكتب قيمة مصنعية صحيحة.");return}
+  if(!Number.isFinite(newDeposit)||newDeposit<=0){alert("اكتب قيمة الدفعة الجديدة أولًا.");return}
+  const wallet=document.getElementById(`qcWallet-${i}`)?.value||"";
+  if(!wallet&&!confirm("مفيش محفظة محددة للدفعة، فمش هتتسجل كحركة في الحسابات — تكمل بدون تحديد محفظة؟"))return;
+  r.labor=labor;
+  r.partsTotal=+r.partsTotal||0;
+  r.total=r.partsTotal+labor;
+  r.deposit=(+r.deposit||0)+newDeposit;
+  if(wallet)r.depositWallet=wallet;
+  r.remain=Math.max(0,r.total-r.deposit);
+  put(K.r,a);
+  if(typeof syncWalletForOrderDeposit==="function")syncWalletForOrderDeposit(r);
+  routeViewState.quickCloseId=null;
+  refreshRouteViews();
+}
 function confirmQuickClose(i){
   const a=arr(K.r),r=a.find(x=>x.id===i);
   if(!r||r.closed||r.paid)return;
