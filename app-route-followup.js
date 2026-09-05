@@ -22,6 +22,21 @@ function clearRouteContactStatus(i){
   refreshRouteViews();
 }
 function retryRouteContact(i){clearRouteContactStatus(i);}
+// حالة الصف المختصر لأي أمر شغل في خط السير: بيرجع {collapsed,cls,text,retry}
+// لو الأمر لازم يتعرض مختصر (سطر واحد) بدل الكارت الكامل، وbtn "إعادة
+// المحاولة" بيظهر بس للحالات اللي ممكن ترجعها (contactStatus).
+function routeRowStatusInfo(x){
+  if(x.closed)return{collapsed:true,cls:"route-badge-done",text:"✅ مُغلق",retry:false};
+  if(x.status==="مكتمل")return{collapsed:true,cls:"route-badge-done",text:"✅ مكتمل",retry:false};
+  if(x.status==="ملغي")return{collapsed:true,cls:"route-badge-cancelled",text:"🚫 ملغي",retry:false};
+  if(x.workshopStatus&&x.workshopStatus!=="غير مطلوب")return{collapsed:true,cls:"route-badge-workshop",text:`🏭 ${x.workshopStatus}`,retry:false};
+  if(x.partsWaiting)return{collapsed:true,cls:"route-badge-needspart",text:"📦 محتاج قطعة غيار",retry:false};
+  if(x.contactStatus==="unavailable")return{collapsed:true,cls:"route-badge-unavailable",text:"📵 غير متاح",retry:true};
+  if(x.contactStatus==="no-answer")return{collapsed:true,cls:"route-badge-noanswer",text:"📞 لم يرد",retry:true};
+  if(x.contactStatus==="second-visit")return{collapsed:true,cls:"route-badge-secondvisit",text:"🔁 محتاج زيارة تانية",retry:true};
+  if(x.contactStatus==="needs-part")return{collapsed:true,cls:"route-badge-needspart",text:"📦 محتاج قطعة غيار",retry:true};
+  return{collapsed:false};
+}
 function routeOrderForList(list){
   const s=settings(), ids=list.map(x=>x.id), saved=Array.isArray(s.routeOrder)?s.routeOrder:[];
   const valid=saved.filter(id=>ids.includes(id));
@@ -124,26 +139,39 @@ function renderRoute(){
   const orderIds=routeOrderForList(list), byId=new Map(list.map(x=>[x.id,x]));
   list=orderIds.map(id=>byId.get(id)).filter(Boolean);
   if(!list.length){el.innerHTML=`<div class="item">لا يوجد مواعيد ضمن الاختيار الحالي.</div>`;return}
+  // "اللي عليه الدور": أول أمر شغل في ترتيب اليوم لسه نشط (مش مكتمل/مغلق/ملغي/
+  // في الورشة/محتاج قطعة غيار/عليه حالة تواصل) هو الوحيد اللي بيتفتح كارت كامل.
+  // أي حاجة تانية — سواء خلصت أو لسه ماجاش دورها — بتترجع سطر واحد مختصر.
+  const currentTurnId=(list.find(x=>!routeRowStatusInfo(x).collapsed)||{}).id;
   let groups={};
   list.forEach(x=>{let k=x._addr.center||"بدون مركز";(groups[k]=groups[k]||[]).push(x)});
   let html="";
   Object.keys(groups).forEach(center=>{
     html+=`<h3 class="route-group-title">🗺️ ${esc(center)} <span class="badge">${groups[center].length}</span></h3>`;
     html+=groups[center].map(x=>{
-      let visitedToday=!!(x.visitedAt&&dayKeyLocal(x.visitedAt)===today),isDone=x.status==="مكتمل";
-      let contactBadge=x.contactStatus==='unavailable'?'<span class="badge route-badge-unavailable">📵 غير متاح</span>':x.contactStatus==='no-answer'?'<span class="badge route-badge-noanswer">📞 لم يرد</span>':'';
-      let stateBadge=x.closed?'<span class="badge route-badge-done">✅ مُغلق</span>':x.status==="ملغي"?'<span class="badge">🚫 ملغي</span>':contactBadge|| (visitedToday?'<span class="badge route-badge-visited">🚶 تمت الزيارة</span>':'<span class="badge route-badge-pending">⏳ قيد الانتظار</span>'),lateBadge=dayKeyLocal(x.visit)<today&&!x.closed&&x.status!=="ملغي"&&!x.contactStatus?'<span class="badge">⚠️ متأخر</span>':"",offBadge=x._viaClosedOffSchedule?'<span class="badge route-badge-offsched" title="اتقفل هذا اليوم بدون ما يكون مجدول له أصلًا">📦 بدون جدولة</span>':"";
-      const contactCollapsed=!!x.contactStatus && !x.closed && !isDone;
-      if(isDone || contactCollapsed){
-        const statusText=isDone?'✅ مكتمل':(x.contactStatus==='unavailable'?'📵 غير متاح':'📞 لم يرد');
-        const statusClass=isDone?'route-badge-done':(x.contactStatus==='unavailable'?'route-badge-unavailable':'route-badge-noanswer');
-        const when=x.contactStatusAt?new Date(x.contactStatusAt).toLocaleString('ar-EG',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
-        const retryBtn=contactCollapsed?`<button type="button" class="route-retry-btn mini-action" onclick="event.stopPropagation();retryRouteContact('${x.id}')" title="إرجاع الطلب إلى الحالة النشطة لإعادة المحاولة">🔄 إعادة المحاولة</button>`:'';
-        return `<div class="route-completed-row" data-route-id="${x.id}" onclick="location.href='request.html?id=${x.id}'" title="اضغط لفتح أمر الشغل"><b>👤 ${esc(x._c.name||"بدون اسم")}</b><span class="badge ${statusClass}">${statusText}</span><span class="route-row-arrows">${retryBtn}<button type="button" class="route-up-btn mini-action" onclick="event.stopPropagation();moveRouteItem('${x.id}',-1)" title="تحريك لأعلى">⬆️</button><button type="button" class="route-down-btn mini-action" onclick="event.stopPropagation();moveRouteItem('${x.id}',1)" title="تحريك لأسفل">⬇️</button></span></div>`;
+      let visitedToday=!!(x.visitedAt&&dayKeyLocal(x.visitedAt)===today);
+      let info=routeRowStatusInfo(x), isTurn=x.id===currentTurnId;
+      if(info.collapsed || !isTurn){
+        // سطر مختصر: إما لأن الأمر وصل لحالة نهائية/معلّقة (مكتمل، مغلق، ملغي،
+        // في الورشة، محتاج قطعة غيار، تعليق تواصل)، أو لأنه لسه في الطابور
+        // ومستنّي دوره.
+        let badges=[];
+        if(info.collapsed){
+          badges.push(`<span class="badge ${info.cls}">${info.text}</span>`);
+          if(x._viaClosedOffSchedule)badges.push(`<span class="badge route-badge-offsched" title="اتقفل هذا اليوم بدون ما يكون مجدول له أصلًا">📦 بدون جدولة</span>`);
+        }else{
+          badges.push(visitedToday?`<span class="badge route-badge-visited">🚶 العمل جارٍ</span>`:`<span class="badge route-badge-pending">⏳ قيد الانتظار</span>`);
+          if(dayKeyLocal(x.visit)<today)badges.push(`<span class="badge">⚠️ متأخر</span>`);
+        }
+        const retryBtn=info.retry?`<button type="button" class="route-retry-btn mini-action" onclick="event.stopPropagation();retryRouteContact('${x.id}')" title="إرجاع الطلب إلى الحالة النشطة لإعادة المحاولة">🔄 إعادة المحاولة</button>`:'';
+        return `<div class="route-completed-row" data-route-id="${x.id}" onclick="location.href='request.html?id=${x.id}'" title="اضغط لفتح أمر الشغل"><b>👤 ${esc(x._c.name||"بدون اسم")}</b><span class="route-row-badges">${badges.join("")}</span><span class="route-row-arrows">${retryBtn}<button type="button" class="route-up-btn mini-action" onclick="event.stopPropagation();moveRouteItem('${x.id}',-1)" title="تحريك لأعلى">⬆️</button><button type="button" class="route-down-btn mini-action" onclick="event.stopPropagation();moveRouteItem('${x.id}',1)" title="تحريك لأسفل">⬇️</button></span></div>`;
       }
-      let toggleBtn=(!x.closed&&x.status!=="ملغي")?`<button type="button" class="secondary mini-action" onclick="event.preventDefault();event.stopPropagation();toggleVisited('${x.id}')">${visitedToday?"↩️ إلغاء تسجيل الزيارة":"✅ تسجيل الزيارة"}</button>`:"";
-      let contactBtns=(!x.closed&&x.status!=="ملغي")?`<button type="button" class="route-contact-unavailable mini-action" onclick="event.preventDefault();event.stopPropagation();setRouteContactStatus('${x.id}','unavailable')">📵 غير متاح</button><button type="button" class="route-contact-noanswer mini-action" onclick="event.preventDefault();event.stopPropagation();setRouteContactStatus('${x.id}','no-answer')">📞 لم يرد</button>`:"";
-      return `<div class="item route-order-card" data-route-id="${x.id}" onclick="location.href='request.html?id=${x.id}'" title="اضغط لعرض تفاصيل أمر الشغل"><div class="route-order-head"><a href="request.html?id=${x.id}" onclick="event.stopPropagation()"><b>🛠️ ${esc(x.no)}</b></a><span class="route-order-name">👤 ${esc(x._c.name||"")}</span><span class="route-head-status">${stateBadge}${lateBadge}${offBadge}</span></div><div class="route-order-data"><div class="route-data-cell">📍 <span>${esc(addressText(x._addr))}</span></div><div class="route-data-cell">📞 <span>${contactLinksHtml(x._c.phone)}</span></div><div class="route-data-cell">🔧 <span>${esc(deviceName(x.deviceId))}</span></div><div class="route-data-cell">📝 <span>${esc(x.fault||"")}</span></div><div class="route-data-cell">⏰ <span>${x.visit?new Date(x.visit).toLocaleString("ar-EG",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</span></div>${x.closed?`<div class="route-data-cell">💰 <span>${Math.max(0,(+x.total||0)-(+x.deposit||0)).toFixed(2)} ج</span></div>`:""}</div><div class="route-order-actions">${toggleBtn?`<div class="route-visit-row">${toggleBtn}</div>`:""}${contactBtns?`<div class="route-contact-row">${contactBtns}</div>`:""}<div class="route-arrows-row"><button type="button" class="route-up-btn mini-action" onclick="event.preventDefault();event.stopPropagation();moveRouteItem('${x.id}',-1)" title="تحريك لأعلى">⬆️</button><button type="button" class="route-down-btn mini-action" onclick="event.preventDefault();event.stopPropagation();moveRouteItem('${x.id}',1)" title="تحريك لأسفل">⬇️</button></div></div></div>`;
+      // الأمر اللي عليه الدور فقط: كارت كامل بكل التفاصيل.
+      let stateBadge=visitedToday?'<span class="badge route-badge-visited">🚶 تمت الزيارة</span>':'<span class="badge route-badge-pending">⏳ قيد الانتظار</span>',lateBadge=dayKeyLocal(x.visit)<today?'<span class="badge">⚠️ متأخر</span>':"";
+      let toggleBtn=`<button type="button" class="secondary mini-action" onclick="event.preventDefault();event.stopPropagation();toggleVisited('${x.id}')">${visitedToday?"↩️ إلغاء تسجيل الزيارة":"✅ تسجيل الزيارة"}</button>`;
+      let contactBtns=`<button type="button" class="route-contact-unavailable mini-action" onclick="event.preventDefault();event.stopPropagation();setRouteContactStatus('${x.id}','unavailable')">📵 غير متاح</button><button type="button" class="route-contact-noanswer mini-action" onclick="event.preventDefault();event.stopPropagation();setRouteContactStatus('${x.id}','no-answer')">📞 لم يرد</button>`;
+      let contactBtns2=`<button type="button" class="route-contact-secondvisit mini-action" onclick="event.preventDefault();event.stopPropagation();setRouteContactStatus('${x.id}','second-visit')">🔁 محتاج زيارة تانية</button><button type="button" class="route-contact-needspart mini-action" onclick="event.preventDefault();event.stopPropagation();setRouteContactStatus('${x.id}','needs-part')">📦 محتاج قطعة غيار</button>`;
+      return `<div class="item route-order-card" data-route-id="${x.id}" onclick="location.href='request.html?id=${x.id}'" title="اضغط لعرض تفاصيل أمر الشغل"><div class="route-order-head"><a href="request.html?id=${x.id}" onclick="event.stopPropagation()"><b>🛠️ ${esc(x.no)}</b></a><span class="route-order-name">👤 ${esc(x._c.name||"")}</span><span class="route-head-status">${stateBadge}${lateBadge}</span></div><div class="route-order-data"><div class="route-data-cell">📍 <span>${esc(addressText(x._addr))}</span></div><div class="route-data-cell">📞 <span>${contactLinksHtml(x._c.phone)}</span></div><div class="route-data-cell">🔧 <span>${esc(deviceName(x.deviceId))}</span></div><div class="route-data-cell">📝 <span>${esc(x.fault||"")}</span></div><div class="route-data-cell">⏰ <span>${x.visit?new Date(x.visit).toLocaleString("ar-EG",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</span></div></div><div class="route-order-actions"><div class="route-visit-row">${toggleBtn}</div><div class="route-contact-row">${contactBtns}</div><div class="route-contact-row">${contactBtns2}</div><div class="route-arrows-row"><button type="button" class="route-up-btn mini-action" onclick="event.preventDefault();event.stopPropagation();moveRouteItem('${x.id}',-1)" title="تحريك لأعلى">⬆️</button><button type="button" class="route-down-btn mini-action" onclick="event.preventDefault();event.stopPropagation();moveRouteItem('${x.id}',1)" title="تحريك لأسفل">⬇️</button></div></div></div>`;
     }).join("");
   });
   el.innerHTML=html;
