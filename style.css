@@ -387,6 +387,9 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .route-turn-flag{background:#e8f1ff;color:#1769aa;font-weight:bold;font-size:12px;border-radius:8px;padding:5px 8px;margin-bottom:8px;display:inline-block}
 /* فورم التقفيل السريع */
 .route-quickclose-form{background:#f7f9fb;border:1px dashed #b9c3cc;border-radius:10px;padding:10px;margin-top:6px;display:flex;flex-direction:column;gap:8px}
+.route-quickclose-parts{background:#fff;border-radius:9px;padding:9px;display:flex;flex-direction:column;gap:6px}
+.route-quickclose-parts .part-add{grid-template-columns:2fr 1fr auto}
+.route-quickclose-parts .part-add-external{grid-template-columns:2fr 1fr 1fr 1fr auto}
 .route-quickclose-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .route-quickclose-row label{font-size:12px}
 .route-quickclose-actions{display:flex;gap:6px}
@@ -406,6 +409,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .route-order-actions{gap:5px}
   .route-order-actions .mini-action{min-width:0;padding:7px 6px!important;font-size:10px!important}
   .route-quickclose-row{grid-template-columns:1fr}
+  .route-quickclose-parts .part-add,.route-quickclose-parts .part-add-external{grid-template-columns:1fr}
 }
 .status-history{grid-column:1/-1;background:#f7f9fb;border-radius:10px;padding:9px;margin:9px 0}.status-history h3{margin:0 0 6px;font-size:14px}.status-history-row{background:#fff;border-radius:7px;padding:6px 8px;margin-bottom:5px;font-size:12px}.status-history-line{display:flex;justify-content:space-between;gap:8px}.status-history-row small{color:#687583}.status-history-note{margin-top:4px;padding-top:4px;border-top:1px dashed #e2e6eb;color:#42505c;font-size:11px;overflow-wrap:anywhere}
 

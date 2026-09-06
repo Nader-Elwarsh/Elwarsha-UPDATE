@@ -61,7 +61,7 @@ function moveRouteItem(id,delta){
 // ---- خط سير الورشة: كل الأيام مش بس اليوم ----
 // حالة الصفحة (اليوم المختار / وضع "كل المتأخر") محفوظة في متغيّر بسيط بدل
 // localStorage عشان بتتصفّر كل ما تفتح الصفحة من جديد على اليوم الحالي.
-const routeViewState={day:null,overdueView:false,quickCloseId:null,lastTurnId:undefined};
+const routeViewState={day:null,overdueView:false,quickCloseId:null,quickCloseDraft:null,lastTurnId:undefined};
 function routeDaysWithData(){
   const set=new Set();
   arr(K.r).forEach(x=>{
@@ -93,6 +93,7 @@ function jumpRouteToday(){
   routeViewState.overdueView=false;
   routeViewState.day=dayKeyLocal(new Date());
   routeViewState.quickCloseId=null;
+  routeViewState.quickCloseDraft=null;
   routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
@@ -100,12 +101,14 @@ function selectRouteDay(day){
   routeViewState.overdueView=false;
   routeViewState.day=day;
   routeViewState.quickCloseId=null;
+  routeViewState.quickCloseDraft=null;
   routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
 function toggleRouteOverdueView(){
   routeViewState.overdueView=!routeViewState.overdueView;
   routeViewState.quickCloseId=null;
+  routeViewState.quickCloseDraft=null;
   routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
@@ -224,17 +227,33 @@ function clearRouteSearch(){
   if(elS){elS.value="";renderRoute();}
 }
 // فورم التقفيل السريع: بيظهر جوه كارت الأمر اللي عليه الدور نفسه من غير ما
-// تسيبي صفحة خط السير خالص. فيه مساران: (1) تسجيل دفعة/عربون دلوقتي من غير
-// ما تقفلي الأمر (لو التحصيل جزئي)، أو (2) تقفيل نهائي بيحصّل كل المتبقي
-// ويقفل الأمر. المسار التاني بيتجاهل خانة "دفعة جديدة الآن" عشان التقفيل
-// النهائي بيحصّل كل حاجة فعليًا في نفس اللحظة، فمفيش داعي نخصمها الأول.
+// تسيبي صفحة خط السير خالص. فيه: (1) إضافة قطع غيار من المخزن أو خارجه لو
+// اكتشفتي إنه محتاج قطعة وانتي واقفة قدام العميل، (2) تسجيل دفعة/عربون
+// دلوقتي من غير ما تقفلي الأمر (لو التحصيل جزئي)، (3) تقفيل نهائي بيحصّل
+// كل المتبقي ويقفل الأمر (وده بيتجاهل خانة "دفعة جديدة الآن" عشان بيحصّل
+// كل حاجة فعليًا في نفس اللحظة).
 function routeQuickCloseFormHtml(x){
-  const partsTotal=+x.partsTotal||0, labor=+x.labor||0, deposit=+x.deposit||0;
+  const partsTotal=+x.partsTotal||0, deposit=+x.deposit||0;
+  const draft=(routeViewState.quickCloseDraft&&routeViewState.quickCloseDraft.id===x.id)?routeViewState.quickCloseDraft:null;
+  const labor=draft?draft.labor:(+x.labor||0), newDeposit=draft?draft.newDeposit:0;
   const wallets=settings().wallets||[];
+  const partsRows=(x.parts||[]).map(p=>{
+    const stockPart=p.external?null:arr(K.p).find(z=>z.id===p.partId);
+    const nm=p.external?(p.name||"قطعة خارجية"):(stockPart?.name||"قطعة محذوفة");
+    const amount=(p.qty||0)*(p.sell||0);
+    return `<div class="part-row compact-part${p.external?" part-row-external":""}"><span>${p.external?"🧳":"🔧"} ${esc(nm)}</span><span>× ${p.qty}</span><strong>${amount.toFixed(2)} ج</strong></div>`;
+  }).join("");
   return `<div class="route-quickclose-form" onclick="event.stopPropagation()">
+    <div class="route-quickclose-parts">
+      <b>🔧 قطع الغيار المضافة</b>
+      ${partsRows||'<div class="hint">لا توجد قطع غيار مضافة.</div>'}
+      <div class="part-add request-part-add part-autocomplete-row"><div class="part-autocomplete"><input type="text" id="rpPartSearch" class="part-autocomplete-input" placeholder="🔍 اكتب اسم القطعة..." autocomplete="off" oninput="filterRequestPartOptions(this.value)" onfocus="filterRequestPartOptions(this.value)" onblur="hideRequestPartResults()"><input type="hidden" id="rpPart"><div id="rpPartResults" class="part-autocomplete-results hidden"></div></div><input id="rpQty" type="number" min="1" value="1" inputmode="numeric"><button type="button" class="primary mini-action" onclick="routeConfirmAddPart('${x.id}')">➕ من المخزن</button></div>
+      <div id="rpStockHint" class="hint">اختر قطعة لمعرفة الكمية المتاحة.</div>
+      <div class="part-add request-part-add part-add-external"><input id="rpExtName" type="text" placeholder="اسم القطعة (خارج المخزن)"><input id="rpExtBuy" type="number" min="0" step=".01" placeholder="سعر الشراء"><input id="rpExtSell" type="number" min="0" step=".01" placeholder="سعر البيع"><input id="rpExtQty" type="number" min="1" value="1" inputmode="numeric"><button type="button" class="secondary mini-action" onclick="routeConfirmAddExternalPart('${x.id}')">🧳 قطعة خارج المخزن</button></div>
+    </div>
     <div class="route-quickclose-row"><label>🔨 المصنعية<input type="number" min="0" step=".01" id="qcLabor-${x.id}" value="${labor.toFixed(2)}" oninput="updateQuickCloseTotal('${x.id}')"></label><label>🔧 قطع الغيار<input type="text" value="${partsTotal.toFixed(2)} ج" disabled></label></div>
     <div class="route-quickclose-row"><label>💰 الإجمالي<input type="text" id="qcTotal-${x.id}" value="${(partsTotal+labor).toFixed(2)} ج" disabled></label><label>💵 العربون المسجّل قبل كده<input type="text" value="${deposit.toFixed(2)} ج" disabled></label></div>
-    <div class="route-quickclose-row"><label>➕ دفعة جديدة استلمتها الآن <small>لو التحصيل جزئي بس</small><input type="number" min="0" step=".01" id="qcNewDeposit-${x.id}" value="0" oninput="updateQuickCloseTotal('${x.id}')"></label><label>💵 المتبقي المتوقع بعدها<input type="text" id="qcRemain-${x.id}" value="${Math.max(0,partsTotal+labor-deposit).toFixed(2)} ج" disabled></label></div>
+    <div class="route-quickclose-row"><label>➕ دفعة جديدة استلمتها الآن <small>لو التحصيل جزئي بس</small><input type="number" min="0" step=".01" id="qcNewDeposit-${x.id}" value="${newDeposit.toFixed(2)}" oninput="updateQuickCloseTotal('${x.id}')"></label><label>💵 المتبقي المتوقع بعدها<input type="text" id="qcRemain-${x.id}" value="${Math.max(0,partsTotal+labor-deposit-newDeposit).toFixed(2)} ج" disabled></label></div>
     <label>💳 هتتحصل في محفظة إيه؟ <small>اختياري</small><select id="qcWallet-${x.id}"><option value="">بدون تحديد</option>${wallets.map(w=>`<option>${esc(w)}</option>`).join("")}</select></label>
     <div class="route-quickclose-actions"><button type="button" class="secondary mini-action" onclick="confirmQuickPartialPayment('${x.id}')">💰 تسجيل دفعة الآن (من غير تقفيل)</button></div>
     <div class="route-quickclose-actions"><button type="button" class="primary mini-action" onclick="confirmQuickClose('${x.id}')">✅ تحصيل الباقي بالكامل وتقفيل الأمر</button><button type="button" class="secondary mini-action" onclick="toggleQuickClose('${x.id}')">إلغاء</button></div>
@@ -243,13 +262,37 @@ function routeQuickCloseFormHtml(x){
 function updateQuickCloseTotal(i){
   const r=arr(K.r).find(x=>x.id===i);if(!r)return;
   const labor=+(document.getElementById(`qcLabor-${i}`)?.value||0), newDeposit=+(document.getElementById(`qcNewDeposit-${i}`)?.value||0);
+  routeViewState.quickCloseDraft={id:i,labor,newDeposit};
   const partsTotal=+r.partsTotal||0, deposit=+r.deposit||0;
   const total=partsTotal+labor;
   const totalEl=document.getElementById(`qcTotal-${i}`),remainEl=document.getElementById(`qcRemain-${i}`);
   if(totalEl)totalEl.value=total.toFixed(2)+" ج";
   if(remainEl)remainEl.value=Math.max(0,total-deposit-newDeposit).toFixed(2)+" ج";
 }
-function toggleQuickClose(i){routeViewState.quickCloseId=routeViewState.quickCloseId===i?null:i;renderRoute();}
+function toggleQuickClose(i){
+  routeViewState.quickCloseId=routeViewState.quickCloseId===i?null:i;
+  routeViewState.quickCloseDraft=null;
+  renderRoute();
+}
+// إضافة قطعة غيار من المخزن/خارجه من نفس فورم التقفيل السريع، من غير ما
+// تسيبي خط السير — بنحفظ المصنعية المكتوبة أولًا عشان ما تضيعش لما الفورم
+// يتجدد بعد إضافة القطعة.
+function routeSaveDraftLabor(i){
+  const a=arr(K.r),r=a.find(x=>x.id===i);
+  if(!r)return;
+  const labor=+(document.getElementById(`qcLabor-${i}`)?.value);
+  if(Number.isFinite(labor)&&labor>=0){r.labor=labor;r.total=(+r.partsTotal||0)+labor;r.remain=Math.max(0,r.total-(+r.deposit||0));put(K.r,a);}
+}
+function routeConfirmAddPart(requestId){
+  routeSaveDraftLabor(requestId);
+  confirmAddPartToRequest(requestId);
+  renderRoute();
+}
+function routeConfirmAddExternalPart(requestId){
+  routeSaveDraftLabor(requestId);
+  confirmAddExternalPartToRequest(requestId);
+  renderRoute();
+}
 // تسجيل دفعة/عربون جزئي دلوقتي من غير تقفيل الأمر — للحالة اللي العميل
 // بيدفع جزء بس دلوقتي وهيكمل الباقي بعدين.
 function confirmQuickPartialPayment(i){
@@ -270,6 +313,7 @@ function confirmQuickPartialPayment(i){
   put(K.r,a);
   if(typeof syncWalletForOrderDeposit==="function")syncWalletForOrderDeposit(r);
   routeViewState.quickCloseId=null;
+  routeViewState.quickCloseDraft=null;
   refreshRouteViews();
 }
 function confirmQuickClose(i){
@@ -295,6 +339,7 @@ function confirmQuickClose(i){
   if(typeof syncTreasuryForOrderClose==="function")syncTreasuryForOrderClose(r,collected);
   if(typeof syncWalletForOrderClose==="function")syncWalletForOrderClose(r,collected,wallet);
   routeViewState.quickCloseId=null;
+  routeViewState.quickCloseDraft=null;
   if(typeof renderDash==="function")renderDash();
   refreshRouteViews();
 }
