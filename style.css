@@ -163,7 +163,6 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .simple-stat b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .simple-stat strong{font-size:18px;text-align:left}
 .simple-stat small{grid-column:2;color:#687583;font-size:11px}
-.simple-main-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .simple-tile{border:1px solid #dfe4e9;background:#fff;color:#18212b;border-radius:12px;min-height:82px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-family:inherit;cursor:pointer;box-shadow:0 1px 4px #0000000a}
 .simple-tile span{font-size:24px;line-height:1}
 .simple-tile span svg{width:24px;height:24px}

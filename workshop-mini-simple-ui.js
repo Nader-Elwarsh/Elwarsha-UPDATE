@@ -286,7 +286,8 @@
             ${simpleButton(`لم يتردد من فترة (${cnt("stale")})`, "⏳", "showCustomerBucket('stale')", "")}
             ${simpleButton(`متبقي غير محصل (${cnt("unpaid")})`, "💰", "showCustomerBucket('unpaid')", "")}
           </div>
-          <div class="simple-main-actions">
+          <div class="bucket-group-label">عرض الكل</div>
+          <div class="simple-stat-grid">
             ${simpleButton("كل العملاء", "👥", "showAllCustomers()", "primary-tile")}
           </div>
         </section>`;
@@ -377,7 +378,8 @@
         <div class="simple-stat-grid">
           ${types.map(t => simpleButton(`${esc2(t)} (${cnt("type:"+t)})`, categoryIcon(t), `showDeviceBucket('type:${esc2(t)}')`, "")).join("")}
         </div>` : ""}
-        <div class="simple-main-actions">${simpleButton("كل الأجهزة", "🔧", "showAllDevices()", "primary-tile")}</div></section>`;
+        <div class="bucket-group-label">عرض الكل</div>
+        <div class="simple-stat-grid">${simpleButton("كل الأجهزة", "🔧", "showAllDevices()", "primary-tile")}</div></section>`;
       return;
     }
     const q = ($("deviceSearch")?.value || "").toLowerCase().trim();
@@ -498,7 +500,8 @@
             ? `<div class="simple-line-bar simple-line-warn" onclick="showLowStockParts()" role="button" tabindex="0"><span>⚠️ ${low} أصناف عند الحد الأدنى أو أقل</span><b>عرض ›</b></div>`
             : `<div class="simple-line-bar simple-line-ok"><span>✅ لا توجد أصناف منخفضة حاليًا</span></div>`}
           ${cards ? `<div class="bucket-group-label">حسب التصنيف</div><div id="categoryGrid" class="simple-stat-grid">${cards}</div>` : `<div class="simple-empty">لا توجد قطع مسجلة.</div>`}
-          <div class="simple-main-actions">
+          <div class="bucket-group-label">عرض الكل</div>
+          <div class="simple-stat-grid">
             ${simpleButton("كل القطع","📦","showAllParts()","primary-tile")}
           </div>
         </section>`;
