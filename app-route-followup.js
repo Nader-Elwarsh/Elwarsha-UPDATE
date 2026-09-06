@@ -112,6 +112,7 @@ function toggleRouteOverdueView(){
   routeViewState.lastTurnId=undefined;
   renderRouteDayStrip();renderRoute();
 }
+let routeDayStripScrolledOnce=false;
 function renderRouteDayStrip(){
   const el=document.getElementById("routeDayStrip");if(!el)return;
   const today=dayKeyLocal(new Date());
@@ -124,6 +125,14 @@ function renderRouteDayStrip(){
   }).join("");
   const overdueBtn=document.getElementById("routeOverdueToggle");
   if(overdueBtn)overdueBtn.classList.toggle("active",routeViewState.overdueView);
+  // أول ما الصفحة تتفتح، نعمل سكرول لخانة النهارده (أو الخانة النشطة) على
+  // طول عشان محتاجش تسحبي يمينًا/شمالًا عشان توصلي للأيام الحديثة. بعد
+  // كده منعملهاش تاني تلقائي عشان منلغيش تنقل المستخدم اليدوي بين الأيام.
+  if(!routeDayStripScrolledOnce){
+    routeDayStripScrolledOnce=true;
+    const activeCell=el.querySelector(".route-day-cell.active")||el.querySelector(".route-day-cell.is-today");
+    if(activeCell)setTimeout(()=>activeCell.scrollIntoView({behavior:"instant",inline:"center",block:"nearest"}),0);
+  }
 }
 function renderRoute(){
   let el=document.getElementById("routeList");if(!el)return;
@@ -236,7 +245,7 @@ function routeQuickCloseFormHtml(x){
   const partsTotal=+x.partsTotal||0, deposit=+x.deposit||0;
   const draft=(routeViewState.quickCloseDraft&&routeViewState.quickCloseDraft.id===x.id)?routeViewState.quickCloseDraft:null;
   const labor=draft?draft.labor:(+x.labor||0), newDeposit=draft?draft.newDeposit:0;
-  const wallets=settings().wallets||[];
+  const wallets=settings().wallets||[], defaultWallet=settings().defaultWallet||"";
   const partsRows=(x.parts||[]).map(p=>{
     const stockPart=p.external?null:arr(K.p).find(z=>z.id===p.partId);
     const nm=p.external?(p.name||"قطعة خارجية"):(stockPart?.name||"قطعة محذوفة");
@@ -254,7 +263,7 @@ function routeQuickCloseFormHtml(x){
     <div class="route-quickclose-row"><label>🔨 المصنعية<input type="number" min="0" step=".01" id="qcLabor-${x.id}" value="${labor.toFixed(2)}" oninput="updateQuickCloseTotal('${x.id}')"></label><label>🔧 قطع الغيار<input type="text" value="${partsTotal.toFixed(2)} ج" disabled></label></div>
     <div class="route-quickclose-row"><label>💰 الإجمالي<input type="text" id="qcTotal-${x.id}" value="${(partsTotal+labor).toFixed(2)} ج" disabled></label><label>💵 العربون المسجّل قبل كده<input type="text" value="${deposit.toFixed(2)} ج" disabled></label></div>
     <div class="route-quickclose-row"><label>➕ دفعة جديدة استلمتها الآن <small>لو التحصيل جزئي بس</small><input type="number" min="0" step=".01" id="qcNewDeposit-${x.id}" value="${newDeposit.toFixed(2)}" oninput="updateQuickCloseTotal('${x.id}')"></label><label>💵 المتبقي المتوقع بعدها<input type="text" id="qcRemain-${x.id}" value="${Math.max(0,partsTotal+labor-deposit-newDeposit).toFixed(2)} ج" disabled></label></div>
-    <label>💳 هتتحصل في محفظة إيه؟ <small>اختياري</small><select id="qcWallet-${x.id}"><option value="">بدون تحديد</option>${wallets.map(w=>`<option>${esc(w)}</option>`).join("")}</select></label>
+    <label>💳 هتتحصل في محفظة إيه؟ <small>اختياري</small><select id="qcWallet-${x.id}"><option value="">بدون تحديد</option>${wallets.map(w=>`<option ${defaultWallet===w?"selected":""}>${esc(w)}</option>`).join("")}</select></label>
     <div class="route-quickclose-actions"><button type="button" class="secondary mini-action" onclick="confirmQuickPartialPayment('${x.id}')">💰 تسجيل دفعة الآن (من غير تقفيل)</button></div>
     <div class="route-quickclose-actions"><button type="button" class="primary mini-action" onclick="confirmQuickClose('${x.id}')">✅ تحصيل الباقي بالكامل وتقفيل الأمر</button><button type="button" class="secondary mini-action" onclick="toggleQuickClose('${x.id}')">إلغاء</button></div>
   </div>`;
