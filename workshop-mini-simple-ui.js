@@ -639,8 +639,6 @@
     state.requestStatus = "";
     state.requestLocation = "";
     $("requestSearch")?.classList.remove("hidden");
-    $("statusFilter")?.classList.remove("hidden");
-    $("workshopFilter")?.classList.remove("hidden");
     renderRequests();
   };
 
@@ -649,9 +647,7 @@
     state.requestBucket = bucket;
     state.requestStatus = "";
     state.requestLocation = "";
-    $("requestSearch")?.classList.add("hidden");
-    $("statusFilter")?.classList.add("hidden");
-    $("workshopFilter")?.classList.add("hidden");
+    $("requestSearch")?.classList.remove("hidden");
     renderRequests();
   };
 
@@ -660,9 +656,7 @@
     state.requestBucket = "";
     state.requestStatus = status;
     state.requestLocation = "";
-    $("requestSearch")?.classList.add("hidden");
-    $("statusFilter")?.classList.add("hidden");
-    $("workshopFilter")?.classList.add("hidden");
+    $("requestSearch")?.classList.remove("hidden");
     renderRequests();
   };
 
@@ -671,9 +665,7 @@
     state.requestBucket = "";
     state.requestStatus = "";
     state.requestLocation = loc;
-    $("requestSearch")?.classList.add("hidden");
-    $("statusFilter")?.classList.add("hidden");
-    $("workshopFilter")?.classList.add("hidden");
+    $("requestSearch")?.classList.remove("hidden");
     renderRequests();
   };
 
@@ -683,8 +675,6 @@
     state.requestStatus = "";
     state.requestLocation = "";
     $("requestSearch")?.classList.add("hidden");
-    $("statusFilter")?.classList.add("hidden");
-    $("workshopFilter")?.classList.add("hidden");
     renderRequests();
   };
 
@@ -858,7 +848,7 @@
       return;
     }
 
-    const q = ($("requestOpsSearch")?.value || $("requestSearch")?.value || "").toLowerCase().trim();
+    const q = ($("requestSearch")?.value || "").toLowerCase().trim();
     const sf = $("requestOpsStatus")?.value || state.requestStatus || "";
     const wf = $("requestOpsWorkshop")?.value || state.requestLocation || "";
     const focus = $("requestOpsFocus")?.value || state.requestBucket || "";
@@ -903,7 +893,6 @@
       </div>
       <div class="request-filter-panel">
         <div class="request-filter-grid">
-          <input id="requestOpsSearch" value="${esc2(q)}" placeholder="🔍 ابحث في الأوامر" oninput="renderRequests()">
           ${selectHtml("requestOpsFocus",[
             {v:"",t:"كل الأوامر"},{v:"needed",t:"🎯 المطلوب الآن"},{v:"completed",t:"✅ مكتمل"},
             {v:"overdue",t:"⚠️ متأخر"},{v:"parts",t:"📦 انتظار قطع"},
@@ -974,8 +963,8 @@
   }
 
   function initSimpleView() {
-    /* نخفي القوائم والبحث والفلاتر افتراضيًا. */
-    ["customerSearch","deviceSearch","partSearch","requestSearch","statusFilter","workshopFilter"].forEach(id => {
+    /* نخفي القوائم والبحث افتراضيًا. */
+    ["customerSearch","deviceSearch","partSearch","requestSearch"].forEach(id => {
       $(id)?.classList.add("hidden");
     });
 
@@ -983,8 +972,6 @@
     if ($("deviceSearch")) $("deviceSearch").oninput = renderDevices;
     if ($("partSearch")) $("partSearch").oninput = renderParts;
     if ($("requestSearch")) $("requestSearch").oninput = renderRequests;
-    if ($("statusFilter")) $("statusFilter").onchange = renderRequests;
-    if ($("workshopFilter")) $("workshopFilter").onchange = renderRequests;
 
     renderCustomers();
     renderDevices();
