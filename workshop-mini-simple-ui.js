@@ -220,6 +220,27 @@
     return requestRows().filter(r => r.deviceId === d.id).length >= 2;
   }
 
+  function deviceIsStale(d) {
+    const orders = requestRows().filter(r => r.deviceId === d.id);
+    if (!orders.length) return false;
+    const active = orders.some(r => !orderIsCompleted(r) && r.status !== "ملغي");
+    if (active) return false;
+    const last = lastOrderTime(orders);
+    if (last === null) return false;
+    return (Date.now() - last) / 86400000 >= STALE_DAYS;
+  }
+
+  function customerRemainingTotal(cid) {
+    return requestRows().filter(r => r.customerId === cid && !r.closed)
+      .reduce((a, r) => a + Math.max(0, (+r.total || 0) - (+r.deposit || 0)), 0);
+  }
+
+  function customerLastContactDate(cid) {
+    const orders = requestRows().filter(r => r.customerId === cid);
+    const t = lastOrderTime(orders);
+    return t === null ? null : new Date(t);
+  }
+
   /* ---------- العملاء ---------- */
   window.showAllCustomers = function () {
     state.customers = true;
@@ -303,21 +324,34 @@
         .filter(Boolean).join(" ").toLowerCase();
       return !q || text.includes(q);
     });
+    const sortKey = $("customerSortSelect")?.value || "newest";
+    const byCreated = c => new Date(c.createdAt || 0).getTime() || 0;
+    if (sortKey === "newest") filtered.sort((a, b) => byCreated(b) - byCreated(a));
+    else if (sortKey === "oldest") filtered.sort((a, b) => byCreated(a) - byCreated(b));
+    else if (sortKey === "name") filtered.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ar"));
     const title = {
       active: "عليه أمر مفتوح حاليًا", workshop: "لديه جهاز في الورشة", completed: "كل أوامره مكتملة",
       none: "بدون أي أمر شغل", city: "🏙️ عملاء المدن", village: "🌾 عملاء القرى",
       stale: "⏳ لم يتردد من فترة", unpaid: "💰 عليه متبقي غير محصل"
     }[bucket] || "كل العملاء";
+    const sortSelectHtml = `<select id="customerSortSelect" onchange="renderCustomers()">
+      <option value="newest" ${sortKey === "newest" ? "selected" : ""}>الأحدث أولًا</option>
+      <option value="oldest" ${sortKey === "oldest" ? "selected" : ""}>الأقدم أولًا</option>
+      <option value="name" ${sortKey === "name" ? "selected" : ""}>الاسم أبجديًا</option>
+    </select>`;
     el.innerHTML = `
-      <div class="simple-list-head"><b>${title}</b><button type="button" class="secondary small-btn" onclick="hideAllCustomers()">رجوع للملخص</button></div>
+      <div class="simple-list-head"><b>${title}</b><div class="simple-list-head-actions">${sortSelectHtml}<button type="button" class="secondary small-btn" onclick="hideAllCustomers()">رجوع للملخص</button></div></div>
       ${filtered.length ? filtered.map(c => {
         const ds = deviceRows().filter(d => d.customerId === c.id).length;
         const rs = requestRows().filter(r => r.customerId === c.id).length;
         const ao = activeOrdersForCustomer(c.id).length;
         const hw = hasWorkshopDeviceForCustomer(c.id);
+        const lastDate = customerLastContactDate(c.id);
+        const remain = customerRemainingTotal(c.id);
         return `<div class="simple-record"><div class="simple-record-icon">👤</div><div class="simple-record-main">
           <a href="customer.html?id=${c.id}"><b>${esc2(c.name)}</b></a><span>📞 ${esc2(c.phone || "—")}</span>
           <small>🔧 ${ds} أجهزة • 🛠️ ${rs} أوامر${ao ? ` • 🔴 ${ao} فعال` : ""}${hw ? " • 🏭 جهاز في الورشة" : ""}</small>
+          <small>${lastDate ? `📅 آخر تعامل: ${lastDate.toLocaleDateString("ar-EG",{day:"2-digit",month:"2-digit",year:"2-digit"})}` : "📅 بدون تعامل سابق"}${remain > 0 ? ` • 💰 متبقي ${remain.toFixed(2)} ج` : ""}</small>
         </div><div class="simple-record-actions"><a class="secondary small-btn" href="customer.html?id=${c.id}">فتح</a><button class="danger-btn small-btn" onclick="deleteCustomerRecord('${c.id}')">حذف</button></div></div>`;
       }).join("") : `<div class="item">لا توجد نتائج.</div>`}`;
   });
@@ -347,6 +381,7 @@
     if (bucket === "completed") return orders.length > 0 && !active && orders.some(r => orderIsCompleted(r));
     if (bucket === "none") return orders.length === 0;
     if (bucket === "recurring") return deviceIsRecurring(d);
+    if (bucket === "stale") return deviceIsStale(d);
     if (bucket.indexOf("type:") === 0) return (d.type || "") === bucket.slice(5);
     return true;
   }
@@ -373,6 +408,7 @@
         <div class="bucket-group-label">متابعة</div>
         <div class="simple-stat-grid">
           ${simpleButton(`متكرر الأعطال (${cnt("recurring")})`, "🔁", "showDeviceBucket('recurring')", "")}
+          ${simpleButton(`لم يتردد جهازه من فترة (${cnt("stale")})`, "⏳", "showDeviceBucket('stale')", "")}
         </div>
         ${types.length ? `<div class="bucket-group-label">حسب النوع</div>
         <div class="simple-stat-grid">
@@ -390,9 +426,19 @@
       const text = [c.name,c.phone,d.type,d.category,d.brand,d.model,d.desc,addressText(c.mainAddress||{}),addressText(c.extraAddress||{})].filter(Boolean).join(" ").toLowerCase();
       return !q || text.includes(q);
     });
+    const sortKey = $("deviceSortSelect")?.value || "newest";
+    const byCreated = d => new Date(d.createdAt || 0).getTime() || 0;
+    if (sortKey === "newest") filtered.sort((a, b) => byCreated(b) - byCreated(a));
+    else if (sortKey === "oldest") filtered.sort((a, b) => byCreated(a) - byCreated(b));
+    else if (sortKey === "type") filtered.sort((a, b) => String(a.type || "").localeCompare(String(b.type || ""), "ar"));
     const title = bucket.indexOf("type:") === 0 ? `📦 ${bucket.slice(5)}` :
-      ({active:"عليه أمر مفتوح حاليًا", workshop:"موجود في الورشة", completed:"كل أوامره مكتملة", none:"بدون أي أمر شغل", recurring:"🔁 متكرر الأعطال"}[bucket] || "كل الأجهزة");
-    el.innerHTML = `<div class="simple-list-head"><b>${title}</b><button type="button" class="secondary small-btn" onclick="hideAllDevices()">رجوع للملخص</button></div>
+      ({active:"عليه أمر مفتوح حاليًا", workshop:"موجود في الورشة", completed:"كل أوامره مكتملة", none:"بدون أي أمر شغل", recurring:"🔁 متكرر الأعطال", stale:"⏳ لم يتردد جهازه من فترة"}[bucket] || "كل الأجهزة");
+    const sortSelectHtml = `<select id="deviceSortSelect" onchange="renderDevices()">
+      <option value="newest" ${sortKey === "newest" ? "selected" : ""}>الأحدث أولًا</option>
+      <option value="oldest" ${sortKey === "oldest" ? "selected" : ""}>الأقدم أولًا</option>
+      <option value="type" ${sortKey === "type" ? "selected" : ""}>النوع أبجديًا</option>
+    </select>`;
+    el.innerHTML = `<div class="simple-list-head"><b>${title}</b><div class="simple-list-head-actions">${sortSelectHtml}<button type="button" class="secondary small-btn" onclick="hideAllDevices()">رجوع للملخص</button></div></div>
       ${filtered.length ? filtered.map(d => `<div class="simple-record"><div class="simple-record-icon">🔧</div><div class="simple-record-main"><a href="device.html?id=${d.id}"><b>${esc2(d.type)} — ${esc2(d.brand)}</b></a><span>${esc2(d.category||"—")} • ${esc2(d.model||"بدون موديل")}</span><small>👤 ${esc2(customerName(d.customerId))}${activeOrdersForDevice(d.id).length ? ` • 🔴 ${activeOrdersForDevice(d.id).length} أمر فعال` : ""}${hasWorkshopDevice(d.id) ? " • 🏭 في الورشة" : ""}</small></div><div class="simple-record-actions"><a class="secondary small-btn" href="device.html?id=${d.id}">فتح</a><button class="danger-btn small-btn" onclick="deleteDeviceRecord('${d.id}')">حذف</button></div></div>`).join("") : `<div class="item">لا توجد نتائج.</div>`}`;
   });
 
