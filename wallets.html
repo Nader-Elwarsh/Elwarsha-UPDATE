@@ -11,18 +11,9 @@
   <input id="reportMonth" type="month">
   <input id="reportWeek" type="week" class="hidden">
   <div id="monthlyReport"></div>
-  <details class="expense-panel">
-    <summary>🧯 مصاريف التشغيل</summary>
-    <div class="hint">كل مصروف تشغيل بيتسجل كحركة صرف فعلية من محفظة تختارها، فرصيدها بيتحدث تلقائيًا؛ التصنيف الفرعي (وقود، صيانة، إيجار...) قابل للتعديل من ⚙️ الإعدادات.</div>
-    <div class="form-grid expense-form">
-      <label>التاريخ<input id="expDate" type="date"></label>
-      <label>المحفظة<select id="expWallet"></select></label>
-      <label>تصنيف المصروف<select id="expCategory"></select></label>
-      <label>المبلغ<input id="expAmount" type="number" step="0.01" min="0" placeholder="0.00"></label>
-      <label class="wide">السبب<input id="expReason" placeholder="مثال: بنزين، غيار زيت..."></label>
-      <label class="wide">ملاحظة<input id="expNote" placeholder="اختياري"></label>
-    </div>
-    <button type="button" class="primary expense-save" onclick="addExpense()">💾 حفظ المصروف</button>
+  <details class="expense-panel" open>
+    <summary>🧯 تفصيل مصاريف التشغيل حسب النوع (الفترة المختارة)</summary>
+    <div class="hint">سجّلي أي مصروف تشغيل من نموذج "➖ صرف" في صفحة الحسابات الرئيسية أو صفحة أي محفظة — اختاري تصنيف "مصروف تشغيل" ثم نوعه الفرعي (وقود، صيانة، إيجار...)، وهيتبوّب هنا تلقائي حسب النوع. التصنيفات الفرعية قابلة للتعديل من ⚙️ الإعدادات.</div>
     <div id="expenseList"></div>
   </details>
 </section>
